@@ -15,6 +15,10 @@ presentacion/~$*.pptx
 __pycache__/
 *.pyc
 
+# Agente IA — archivos de salida generados en cada ejecución
+agente_ia/ultimo_contexto.json
+agente_ia/reporte_ia.md
+
 # IDEs y SO
 .vscode/
 .idea/

@@ -1,0 +1,149 @@
+# ===============================================================
+# DOCKER COMPOSE — OPENMETADATA + DEPENDENCIAS
+# Se levanta de forma INDEPENDIENTE y se une a la db-network
+# existente. NO modifica el compose principal.
+#
+# REQUISITOS: La infraestructura principal debe estar corriendo:
+#   docker compose up -d
+#
+# COMO LEVANTARLO:
+#   docker compose -f docker-compose.openmetadata.yml up -d
+#
+# COMO BAJARLO:
+#   docker compose -f docker-compose.openmetadata.yml down -v
+#
+# PUERTOS EXPUESTOS:
+#   - OpenMetadata UI:  http://localhost:8585  (user: admin / pass: admin)
+#   - OpenSearch:       http://localhost:9200  (solo interno, no necesitas abrirlo)
+# ===============================================================
+
+x-openmetadata-common: &openmetadata-common
+  networks:
+    - bk_telemetria_opt_bd_db-network
+
+services:
+
+  # ──────────────────────────────────────────────
+  # 1. OPENSEARCH: Motor de búsqueda del catálogo
+  #    RAM estimada: ~1.5 GB (JVM heap 512MB + overhead)
+  # ──────────────────────────────────────────────
+  opensearch:
+    image: opensearchproject/opensearch:2.11.1
+    container_name: om-opensearch
+    environment:
+      - discovery.type=single-node
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - DISABLE_SECURITY_PLUGIN=true
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - om_opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    <<: *openmetadata-common
+
+  # ──────────────────────────────────────────────
+  # 2. BASE DE DATOS INTERNA DE OPENMETADATA
+  #    (Separada de banco_telemetria, solo para OM)
+  #    RAM estimada: ~200 MB
+  # ──────────────────────────────────────────────
+  om-postgres:
+    image: postgres:16-alpine
+    container_name: om-postgres
+    environment:
+      POSTGRES_DB: openmetadata_db
+      POSTGRES_USER: openmetadata
+      POSTGRES_PASSWORD: openmetadata_pass
+    volumes:
+      - om_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openmetadata -d openmetadata_db"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    <<: *openmetadata-common
+
+  # ──────────────────────────────────────────────
+  # 3. OPENMETADATA SERVER
+  #    RAM estimada: ~1.5 GB (JVM)
+  #    UI: http://localhost:8585  (admin / admin)
+  # ──────────────────────────────────────────────
+  openmetadata-server:
+    image: docker.open-metadata.org/openmetadata/server:1.4.0
+    container_name: om-server
+    ports:
+      - "8585:8585"
+      - "8586:8586"
+    environment:
+      # Conexión a su propia BD interna
+      DB_DRIVER_CLASS: org.postgresql.Driver
+      DB_SCHEME: postgresql
+      DB_HOST: om-postgres
+      DB_PORT: 5432
+      OM_DATABASE: openmetadata_db
+      DB_USER: openmetadata
+      DB_USER_PASSWORD: openmetadata_pass
+      # OpenSearch
+      SEARCH_TYPE: opensearch
+      SEARCH_HOST: opensearch
+      SEARCH_PORT: 9200
+      SEARCH_SCHEME: http
+      # Auth básica para demo
+      AUTHENTICATION_PROVIDER: basic
+      JWT_ISSUER: "open-metadata.org"
+      # Permite auto-creación de usuario admin al iniciar
+      AUTHORIZER_ADMIN_PRINCIPALS: '["admin"]'
+      PIPELINE_SERVICE_CLIENT_ENDPOINT: "http://om-ingestion:8080"
+    depends_on:
+      om-postgres:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8585/api/v1/system/version"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 120s
+    <<: *openmetadata-common
+
+  # ──────────────────────────────────────────────
+  # 4. OPENMETADATA INGESTION (Motor de pipelines)
+  #    RAM estimada: ~400 MB (Python)
+  # ──────────────────────────────────────────────
+  om-ingestion:
+    image: docker.open-metadata.org/openmetadata/ingestion:1.4.0
+    container_name: om-ingestion
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW_DB_HOST: om-postgres
+      AIRFLOW_DB_PORT: 5432
+      AIRFLOW_DB_USER: openmetadata
+      AIRFLOW_DB_PASS: openmetadata_pass
+      AIRFLOW_DB: openmetadata_db
+      OPENMETADATA_SERVER_HOST: openmetadata-server
+      OPENMETADATA_SERVER_PORT: 8585
+    depends_on:
+      om-postgres:
+        condition: service_healthy
+      openmetadata-server:
+        condition: service_healthy
+    <<: *openmetadata-common
+
+networks:
+  bk_telemetria_opt_bd_db-network:
+    external: true   # ← Se une a la red ya existente del compose principal
+
+volumes:
+  om_opensearch_data:
+  om_postgres_data:

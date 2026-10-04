@@ -6,9 +6,10 @@ MÓDULO 2: OBSERVABILIDAD Y TELEMETRÍA EN SERVIDOR DESACOPLADO
 Responsable: Estudiante 2
 =============================================================================
 Contenido:
-- Slide 6: Telemetría de Consultas y Almacenamiento Centralizado (Loki + Promtail + Grafana)
-- Slide 7: Diagnóstico Experimental: Datos vs Logs (La Paradoja de los Logs)
-- Generación de gráfico analítico de crecimiento de logs vs tablas.
+- Qué es la telemetría y qué problema resuelve.
+- Flujo: PostgreSQL -> Promtail -> Loki -> Grafana.
+- Por qué se eligió una arquitectura desacoplada.
+- Demostración: actividad operativa frente a datos de negocio.
 
 Este archivo se puede ejecutar de forma INDEPENDIENTE para generar una vista
 previa exclusiva de este módulo:
@@ -61,48 +62,95 @@ def generar_grafico_paradoja_logs():
     return path
 
 def agregar_slides_telemetria(prs):
-    """Inserta las diapositivas de Telemetría en la presentación."""
+    """Inserta las cuatro diapositivas del módulo independiente de Telemetría."""
     img_paradoja = generar_grafico_paradoja_logs()
 
     # --------------------------------------------------------------------------
-    # SLIDE 6: OBSERVABILIDAD Y TELEMETRÍA
+    # SLIDE T1: CONCEPTO
     # --------------------------------------------------------------------------
-    s6 = create_base_slide(prs, "Observabilidad", "Telemetría de Consultas y Almacenamiento Centralizado")
+    s1 = create_base_slide(prs, "Módulo 2 · Telemetría", "¿Qué es la telemetría?")
 
-    add_card(s6, Inches(0.8), Inches(1.65), Inches(5.7), Inches(5.1), "Dimensiones de la Telemetría")
-    tb = s6.shapes.add_textbox(Inches(1.05), Inches(2.25), Inches(5.2), Inches(4.3))
+    add_card(s1, Inches(0.8), Inches(1.65), Inches(5.7), Inches(5.1), "Observar el sistema mientras trabaja")
+    tb = s1.shapes.add_textbox(Inches(1.05), Inches(2.25), Inches(5.2), Inches(4.3))
     tf = tb.text_frame
     tf.word_wrap = True
-    add_structured_item(tf, "Más allá del Hardware:", "No se limita al uso de CPU o memoria; audita cada sentencia ejecutada por clientes y aplicaciones.", 12)
-    add_structured_item(tf, "Throughput (QPS):", "Mide el volumen de operaciones por segundo y detecta picos de demanda inusuales.", 12)
-    add_structured_item(tf, "Composición DML:", "Distribución entre consultas de lectura (SELECT) y operaciones de escritura (INSERT, UPDATE).", 12)
-    add_structured_item(tf, "Alertas Tempranas:", "Identificación inmediata de bloqueos (locks), transacciones canceladas y rollbacks.", 12)
+    add_structured_item(tf, "Definición:", "Es recopilar señales del sistema para entender su estado, comportamiento y problemas.", 12)
+    add_structured_item(tf, "Señales:", "Pueden ser logs, métricas o trazas. En este proyecto usamos principalmente logs de PostgreSQL.", 12)
+    add_structured_item(tf, "Pregunta que responde:", "¿Qué está ocurriendo ahora y qué ocurrió antes de un error?", 12)
+    add_structured_item(tf, "Valor:", "Convierte actividad técnica en evidencia visible para diagnosticar y tomar decisiones.", 12)
 
-    add_card(s6, Inches(6.8), Inches(1.65), Inches(5.7), Inches(5.1), "Eficiencia de Grafana Loki")
-    tb = s6.shapes.add_textbox(Inches(7.05), Inches(2.25), Inches(5.2), Inches(4.3))
+    add_card(s1, Inches(6.8), Inches(1.65), Inches(5.7), Inches(5.1), "Nuestra señal principal")
+    tb = s1.shapes.add_textbox(Inches(7.05), Inches(2.25), Inches(5.2), Inches(4.3))
     tf = tb.text_frame
     tf.word_wrap = True
-    add_structured_item(tf, "Indexación por Metadatos:", "A diferencia de motores convencionales, Loki solo indexa etiquetas; reduce el consumo de RAM hasta un 90%.", 12)
-    add_structured_item(tf, "Consumo No Invasivo:", "Promtail recopila logs en streaming sin abrir bloqueos de tabla ni interferir en sesiones activas.", 12)
-    add_structured_item(tf, "Visibilidad Central:", "Dashboards dinámicos permiten correlacionar latencias de consultas con eventos del motor.", 12)
-    add_structured_item(tf, "Retención Independiente:", "Políticas de archivado de logs sin comprometer el ciclo de vida de los datos transaccionales.", 12)
+    add_structured_item(tf, "PostgreSQL:", "Registra las sentencias SQL y su duración en archivos de log.", 12)
+    add_structured_item(tf, "Qué observamos:", "SELECT, INSERT, UPDATE, errores y volumen de actividad.", 12)
+    add_structured_item(tf, "Resultado:", "Un dashboard permite ver el comportamiento sin revisar archivos manualmente.", 12)
+    add_structured_item(tf, "Idea clave:", "Telemetría no modifica el negocio; observa y explica lo que sucede.", 12)
 
     # --------------------------------------------------------------------------
-    # SLIDE 7: ANÁLISIS DE CRECIMIENTO: DATOS VS LOGS
+    # SLIDE T2: FUNCIONAMIENTO
     # --------------------------------------------------------------------------
-    s7 = create_base_slide(prs, "Diagnóstico Experimental", "Comportamiento del Almacenamiento: Datos vs Logs Transaccionales")
+    s2 = create_base_slide(prs, "Módulo 2 · Telemetría", "¿Cómo funciona nuestra implementación?")
 
-    add_card(s7, Inches(0.8), Inches(1.65), Inches(5.5), Inches(5.1), "Hallazgos de la Simulación")
-    tb = s7.shapes.add_textbox(Inches(1.05), Inches(2.25), Inches(5.0), Inches(4.3))
+    add_card(s2, Inches(0.8), Inches(1.65), Inches(5.7), Inches(5.1), "Flujo de extremo a extremo")
+    tb = s2.shapes.add_textbox(Inches(1.05), Inches(2.25), Inches(5.2), Inches(4.3))
     tf = tb.text_frame
     tf.word_wrap = True
-    add_structured_item(tf, "Condición de Prueba:", "Ejecución continua de 500 sentencias UPDATE consecutivas sobre una única fila de saldo.", 12)
-    add_structured_item(tf, "Resultado en Tablas:", "El tamaño físico de la tabla en disco se mantiene invariable (~12.1 MB).", 12)
-    add_structured_item(tf, "Resultado en Logs:", "Se emitieron 500 registros WAL de 16 MB y cientos de entradas de auditoría hacia Loki.", 12)
-    add_structured_item(tf, "Conclusión Crítica:", "El almacenamiento de logs crece en función de la actividad operativa, no del número de filas.", 12)
-    add_structured_item(tf, "Principio Rector:", "La separación de discos e instancias de log es indispensable para evitar incidentes por disco lleno.", 12)
+    add_structured_item(tf, "1. PostgreSQL:", "Ejecuta la consulta y escribe el evento en postgresql.log.", 12)
+    add_structured_item(tf, "2. Promtail:", "Lee el archivo en streaming y lo envía sin modificar las tablas.", 12)
+    add_structured_item(tf, "3. Loki:", "Recibe y conserva los eventos para poder buscarlos posteriormente.", 12)
+    add_structured_item(tf, "4. Grafana:", "Consulta Loki y presenta contadores, tasas, errores y logs en vivo.", 12)
 
-    s7.shapes.add_picture(img_paradoja, Inches(6.6), Inches(1.8), width=Inches(5.9))
+    add_card(s2, Inches(6.8), Inches(1.65), Inches(5.7), Inches(5.1), "Qué ocurre con una consulta")
+    tb = s2.shapes.add_textbox(Inches(7.05), Inches(2.25), Inches(5.2), Inches(4.3))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    add_structured_item(tf, "Actividad normal:", "El evento aparece como una línea y aumenta el contador del dashboard.", 12)
+    add_structured_item(tf, "Actividad de escritura:", "INSERT y UPDATE permiten observar cambios sobre los datos.", 12)
+    add_structured_item(tf, "Error:", "La consulta intencionalmente inválida aparece en el panel de errores.", 12)
+    add_structured_item(tf, "Tiempo real:", "El dashboard se actualiza cada 5 segundos mientras llega actividad.", 12)
+
+    # --------------------------------------------------------------------------
+    # SLIDE T3: DECISIÓN ARQUITECTÓNICA
+    # --------------------------------------------------------------------------
+    s3 = create_base_slide(prs, "Módulo 2 · Telemetría", "¿Por qué usamos una arquitectura desacoplada?")
+
+    add_card(s3, Inches(0.8), Inches(1.65), Inches(5.7), Inches(5.1), "Decisiones de diseño")
+    tb = s3.shapes.add_textbox(Inches(1.05), Inches(2.25), Inches(5.0), Inches(4.3))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    add_structured_item(tf, "Separación:", "Los datos de negocio permanecen en PostgreSQL y los logs se consultan en Loki.", 12)
+    add_structured_item(tf, "Menor interferencia:", "Promtail lee en solo lectura y no abre bloqueos sobre las tablas.", 12)
+    add_structured_item(tf, "Visibilidad central:", "Grafana reúne la actividad y evita revisar archivos dentro del contenedor.", 12)
+    add_structured_item(tf, "Escalabilidad:", "Podemos añadir más fuentes de logs sin convertirlas en tablas de negocio.", 12)
+    add_structured_item(tf, "Decisión consciente:", "Es una arquitectura de laboratorio; en producción añadiríamos seguridad, retención y réplicas.", 12)
+
+    add_card(s3, Inches(6.8), Inches(1.65), Inches(5.7), Inches(5.1), "Qué evitamos")
+    tb = s3.shapes.add_textbox(Inches(7.05), Inches(2.25), Inches(5.2), Inches(4.3))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    add_structured_item(tf, "Mezclar responsabilidades:", "No usamos las tablas transaccionales como sistema de logs.", 12)
+    add_structured_item(tf, "Perder contexto:", "Conservamos timestamp, usuario, base, proceso y nivel del evento.", 12)
+    add_structured_item(tf, "Diagnóstico manual:", "El dashboard permite ver patrones y errores rápidamente.", 12)
+    add_structured_item(tf, "Confusión conceptual:", "WAL sirve para recuperación; Loki sirve para observabilidad.", 12)
+
+    # --------------------------------------------------------------------------
+    # SLIDE T4: DEMOSTRACIÓN
+    # --------------------------------------------------------------------------
+    s4 = create_base_slide(prs, "Módulo 2 · Telemetría", "¿Qué demostramos en vivo?")
+
+    add_card(s4, Inches(0.8), Inches(1.65), Inches(5.5), Inches(5.1), "Experimento de actividad")
+    tb = s4.shapes.add_textbox(Inches(1.05), Inches(2.25), Inches(5.0), Inches(4.3))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    add_structured_item(tf, "Preparación:", "Poblamos cuentas de prueba para que existan datos reales.", 12)
+    add_structured_item(tf, "Tráfico:", "El generador ejecuta SELECT, UPDATE e INSERT durante 60 segundos.", 12)
+    add_structured_item(tf, "Error controlado:", "Cada cierto número de iteraciones consulta una tabla inexistente.", 12)
+    add_structured_item(tf, "Observación:", "Grafana muestra el aumento de actividad y el error en tiempo casi real.", 12)
+    add_structured_item(tf, "Comparación:", "El modo growth actualiza una fila muchas veces y evidencia el volumen de logs.", 12)
+
+    s4.shapes.add_picture(img_paradoja, Inches(6.6), Inches(1.8), width=Inches(5.9))
 
 if __name__ == "__main__":
     print(">>> Generando vista previa independiente del MÓDULO TELEMETRÍA...")
